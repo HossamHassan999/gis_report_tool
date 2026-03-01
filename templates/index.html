@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GIS Report Tool</title>
+  <style>
+    /* Reset & Base Styles */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0F172A;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    /* Main Card */
+    .card {
+      background: #1E293B;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.4);
+    }
+
+    /* Logo Section */
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin-bottom: 2rem;
+    }
+
+    .logo-icon {
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, #2563EB, #7C3AED);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+    }
+
+    .logo h1 { font-size: 1.3rem; color: #F1F5F9; font-weight: 700; }
+    .logo p  { font-size: .8rem; color: #64748B; }
+
+    /* Drag & Drop Zone */
+    .drop-zone {
+      border: 2px dashed #334155;
+      border-radius: 12px;
+      padding: 2.5rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+      background: #0F172A;
+      position: relative;
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: #2563EB;
+      background: rgba(37,99,235,.06);
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+
+    .drop-icon { font-size: 2.5rem; margin-bottom: .75rem; }
+    .drop-title { color: #94A3B8; font-size: .95rem; margin-bottom: .25rem; }
+    .drop-hint  { color: #475569; font-size: .8rem; }
+
+    /* File Display */
+    #file-name {
+      margin-top: 1rem;
+      padding: .6rem 1rem;
+      background: #0F172A;
+      border-radius: 8px;
+      color: #38BDF8;
+      font-size: .85rem;
+      display: none;
+      text-align: left;
+    }
+
+    /* Buttons */
+    .btn {
+      width: 100%;
+      margin-top: 1.25rem;
+      padding: .85rem;
+      background: linear-gradient(135deg, #2563EB, #7C3AED);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .2s, transform .1s;
+    }
+
+    .btn:hover { opacity: .9; }
+    .btn:active { transform: scale(.98); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* Info & Badges */
+    .formats {
+      display: flex; flex-wrap: wrap; gap: .5rem;
+      margin-top: 1.25rem;
+    }
+
+    .badge {
+      font-size: .72rem;
+      padding: .25rem .6rem;
+      border-radius: 20px;
+      background: #0F172A;
+      color: #64748B;
+      border: 1px solid #1E293B;
+    }
+
+    /* Loading Spinner */
+    .spinner { display: none; }
+    .spinner.active {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+      margin-right: .5rem;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* --- Footer Styles --- */
+    .footer {
+      margin-top: 2rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #64748B;
+      border-top: 1px solid #334155;
+      padding-top: 1.5rem;
+    }
+
+    .footer a {
+      color: #38BDF8;
+      text-decoration: none;
+      font-weight: 600;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .footer a:hover {
+      color: #7C3AED;
+      text-decoration: underline;
+    }
+
+    .linkedin-icon {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">🗺️</div>
+    <div>
+      <h1>GIS Report Tool</h1>
+      <p>Spatial Data Analyzer</p>
+    </div>
+  </div>
+
+  <form id="upload-form" action="/upload" method="post" enctype="multipart/form-data">
+    <div class="drop-zone" id="drop-zone">
+      <input type="file" name="file" id="file-input" accept=".geojson,.gpkg,.kml,.json,.zip"/>
+      <div class="drop-icon">📂</div>
+      <div class="drop-title">Drop your GIS file or ZIP here</div>
+      <div class="drop-hint">or click to browse</div>
+    </div>
+
+    <div id="file-name">📄 <span id="file-label"></span></div>
+
+    <button class="btn" type="submit" id="submit-btn" disabled>
+      <span class="spinner" id="spinner"></span>
+      Analyze File
+    </button>
+  </form>
+
+  <div style="margin-top:.75rem; padding:.6rem .9rem; background:rgba(59,130,246,.06); border:1px solid rgba(59,130,246,.2); border-radius:8px; font-size:.78rem; color:#60A5FA;">
+    📦 <b>Shapefile?</b> Put the files (.shp + .shx + .dbf + .prj) into a single ZIP and upload it
+  </div>
+
+  <div class="formats">
+    <span class="badge">GeoJSON</span>
+    <span class="badge">GPKG</span>
+    <span class="badge">KML</span>
+    <span class="badge">ZIP (SHP)</span>
+  </div>
+
+  <div class="footer">
+    Powered by 
+    <a href="https://www.linkedin.com/in/hossam-hassan-78576116b/" target="_blank">
+      Hossam Hassan
+      <svg class="linkedin-icon" viewBox="0 0 24 24">
+        <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
+      </svg>
+    </a>
+  </div>
+</div>
+
+<script>
+  const input = document.getElementById('file-input');
+  const dropZone = document.getElementById('drop-zone');
+  const fileLabel = document.getElementById('file-label');
+  const fileName = document.getElementById('file-name');
+  const submitBtn = document.getElementById('submit-btn');
+  const spinner = document.getElementById('spinner');
+  const form = document.getElementById('upload-form');
+
+  // Handle file selection
+  input.addEventListener('change', () => {
+    if (input.files.length) {
+      fileLabel.textContent = input.files[0].name;
+      fileName.style.display = 'block';
+      submitBtn.disabled = false;
+    }
+  });
+
+  // Drag and drop logic
+  dropZone.addEventListener('dragover', e => { 
+    e.preventDefault(); 
+    dropZone.classList.add('drag-over'); 
+  });
+
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    input.files = e.dataTransfer.files;
+    input.dispatchEvent(new Event('change'));
+  });
+
+  // Form submission UI
+  form.addEventListener('submit', () => {
+    submitBtn.disabled = true;
+    spinner.classList.add('active');
+    // Update button text
+    const textNode = submitBtn.childNodes[submitBtn.childNodes.length - 1];
+    textNode.textContent = ' Analyzing...';
+  });
+</script>
+</body>
+</html>

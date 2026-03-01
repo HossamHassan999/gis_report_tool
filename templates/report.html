@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GIS Dashboard – {{ data.layer_name }}</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#080D1A;--surface:#0E1525;--card:#131E30;--card2:#172338;
+      --border:#1C2D44;--text:#E2E8F0;--muted:#546E8A;
+      --blue:#3B82F6;--purple:#8B5CF6;--green:#10B981;
+      --red:#EF4444;--amber:#F59E0B;--cyan:#06B6D4;--pink:#EC4899;
+    }
+    html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+
+    /* NAV */
+    .topnav{display:flex;align-items:center;justify-content:space-between;padding:.6rem 1.2rem;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1000;flex-shrink:0}
+    .brand{display:flex;align-items:center;gap:.55rem}
+    .brand-icon{width:30px;height:30px;background:linear-gradient(135deg,var(--blue),var(--purple));border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px}
+    .brand-name{font-weight:700;font-size:.88rem}
+    .brand-file{font-size:.7rem;color:var(--muted);margin-left:.2rem}
+    .nav-tabs{display:flex;gap:.2rem}
+    .nav-tab{padding:.38rem .8rem;border-radius:6px;font-size:.78rem;font-weight:500;color:var(--muted);cursor:pointer;border:none;background:transparent;transition:all .15s}
+    .nav-tab:hover{color:var(--text);background:var(--border)}
+    .nav-tab.active{color:var(--blue);background:rgba(59,130,246,.12)}
+    .nav-actions{display:flex;gap:.4rem}
+    .btn{display:inline-flex;align-items:center;gap:.3rem;padding:.38rem .8rem;border-radius:6px;border:none;font-size:.78rem;font-weight:600;cursor:pointer;transition:opacity .15s}
+    .btn:hover{opacity:.85}
+    .btn-primary{background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff}
+    .btn-ghost{background:var(--card);color:var(--muted);border:1px solid var(--border)}
+
+    /* LAYOUT */
+    .main{flex:1;display:flex;overflow:hidden}
+
+    /* SIDEBAR */
+    .sidebar{width:255px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:.8rem;display:flex;flex-direction:column;gap:.6rem}
+    .sb-title{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.4rem}
+
+    .meta-item{display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid var(--border);gap:.4rem}
+    .meta-label{font-size:.7rem;color:var(--muted);flex-shrink:0}
+    .meta-value{font-size:.72rem;color:var(--text);text-align:right;word-break:break-all}
+
+    /* Field pills */
+    .field-pills{display:flex;flex-direction:column;gap:.22rem}
+    .fp{display:flex;align-items:center;gap:.5rem;padding:.38rem .6rem;border-radius:7px;border:1px solid var(--border);background:var(--card);cursor:pointer;transition:all .15s;user-select:none}
+    .fp:hover{border-color:var(--blue);background:rgba(59,130,246,.07)}
+    .fp.active{border-color:var(--blue);background:rgba(59,130,246,.12)}
+    .fp-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+    .fp-name{font-size:.74rem;font-weight:600;font-family:monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .fp-type{font-size:.62rem;color:var(--muted)}
+
+    /* type colors */
+    .dot-int{background:#3B82F6}.dot-float{background:#8B5CF6}
+    .dot-str{background:#10B981}.dot-bool{background:#F59E0B}.dot-dt{background:#06B6D4}.dot-other{background:#546E8A}
+
+    /* Choropleth */
+    .choro-select{width:100%;padding:.38rem .5rem;background:var(--card);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.76rem}
+    .choro-select:focus{outline:none;border-color:var(--blue)}
+
+    /* CONTENT */
+    .content{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+
+    /* MAP */
+    #map-panel{display:flex;flex-direction:column;flex:1}
+    #map{flex:1;min-height:0}
+    .map-bar{padding:.4rem 1rem;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;font-size:.71rem;color:var(--muted)}
+    .map-bar label{display:flex;align-items:center;gap:.28rem;cursor:pointer}
+    .color-ramp{width:90px;height:7px;border-radius:3px;background:linear-gradient(90deg,#2563eb,#8b5cf6,#ec4899)}
+
+    /* CHARTS PANEL */
+    #charts-panel{padding:1.1rem;display:none;flex-direction:column;gap:1rem}
+
+    /* Empty state */
+    .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.75rem;padding:3rem 1rem;color:var(--muted);text-align:center;border:2px dashed var(--border);border-radius:12px;min-height:300px}
+    .empty-icon{font-size:2.5rem;opacity:.5}
+    .empty-title{font-size:.95rem;font-weight:600;color:var(--text)}
+    .empty-sub{font-size:.8rem;max-width:280px;line-height:1.5}
+
+    /* Field header inside charts */
+    .field-header{display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;background:var(--card);border:1px solid var(--blue);border-radius:10px}
+    .fh-name{font-size:1.1rem;font-weight:700;font-family:monospace;color:var(--text)}
+    .fh-type{font-size:.72rem;padding:.2rem .55rem;border-radius:20px;background:rgba(59,130,246,.15);color:#60A5FA;border:1px solid rgba(59,130,246,.25)}
+    .fh-count{font-size:.72rem;color:var(--muted)}
+    .fh-null{font-size:.72rem;padding:.2rem .55rem;border-radius:20px}
+    .fh-null-ok{background:rgba(16,185,129,.1);color:#34D399}
+    .fh-null-warn{background:rgba(245,158,11,.1);color:#FCD34D}
+    .fh-null-bad{background:rgba(239,68,68,.1);color:#FCA5A5}
+
+    /* KPI row */
+    .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.7rem}
+    .kpi{background:var(--card);border:1px solid var(--border);border-radius:9px;padding:.8rem 1rem;position:relative;overflow:hidden}
+    .kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:2px 0 0 2px}
+    .kpi-blue::before{background:var(--blue)}.kpi-purple::before{background:var(--purple)}
+    .kpi-green::before{background:var(--green)}.kpi-amber::before{background:var(--amber)}
+    .kpi-cyan::before{background:var(--cyan)}.kpi-red::before{background:var(--red)}
+    .kpi-label{font-size:.63rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+    .kpi-value{font-size:1.35rem;font-weight:800;margin-top:.12rem}
+    .kpi-sub{font-size:.63rem;color:var(--muted);margin-top:.06rem}
+
+    /* Charts grid */
+    .cg{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:.8rem}
+    .cg-wide{display:grid;grid-template-columns:1fr;gap:.8rem}
+    .span-all{grid-column:1/-1}
+
+    .cc{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem}
+    .cc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem}
+    .cc-title{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+    .cc-badge{font-size:.62rem;padding:.12rem .42rem;border-radius:10px}
+    .badge-blue{background:rgba(59,130,246,.15);color:#60A5FA;border:1px solid rgba(59,130,246,.2)}
+    .badge-purple{background:rgba(139,92,246,.15);color:#A78BFA;border:1px solid rgba(139,92,246,.2)}
+    .badge-green{background:rgba(16,185,129,.15);color:#34D399;border:1px solid rgba(16,185,129,.2)}
+    .badge-amber{background:rgba(245,158,11,.15);color:#FCD34D;border:1px solid rgba(245,158,11,.2)}
+    .badge-cyan{background:rgba(6,182,212,.15);color:#67E8F9;border:1px solid rgba(6,182,212,.2)}
+
+    .ch{position:relative}
+    .ch-200{height:200px}.ch-240{height:240px}.ch-280{height:280px}.ch-320{height:320px}
+
+    /* mini stats strip */
+    .ms{display:grid;grid-template-columns:repeat(6,1fr);gap:.4rem;margin-top:.75rem}
+    .ms-3{grid-template-columns:repeat(3,1fr)}
+    .msi{text-align:center;padding:.4rem .3rem;background:var(--card2);border-radius:7px}
+    .msi-l{font-size:.6rem;color:var(--muted)}
+    .msi-v{font-size:.82rem;font-weight:700;margin-top:.08rem}
+
+    /* ranking list */
+    .rank-list{display:flex;flex-direction:column;gap:.3rem;max-height:280px;overflow-y:auto}
+    .ri{display:flex;align-items:center;gap:.5rem}
+    .ri-n{font-size:.62rem;color:var(--muted);width:16px;text-align:right;flex-shrink:0}
+    .ri-l{font-size:.72rem;flex:0 0 100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .ri-bw{flex:1;height:16px;background:var(--card2);border-radius:3px;overflow:hidden}
+    .ri-b{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--blue),var(--purple))}
+    .ri-v{font-size:.68rem;color:var(--muted);width:55px;text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums}
+
+    /* quality bar */
+    .qrow{display:flex;align-items:center;gap:.5rem;margin:.18rem 0}
+    .ql{font-size:.7rem;width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;flex-shrink:0}
+    .qbw{flex:1;height:18px;background:var(--card2);border-radius:4px;overflow:hidden}
+    .qb-ok{height:100%;background:linear-gradient(90deg,rgba(16,185,129,.6),rgba(16,185,129,.25));border-radius:4px}
+    .qb-warn{height:100%;background:linear-gradient(90deg,rgba(245,158,11,.7),rgba(245,158,11,.25));border-radius:4px}
+    .qb-bad{height:100%;background:linear-gradient(90deg,rgba(239,68,68,.7),rgba(239,68,68,.25));border-radius:4px}
+    .qp{font-size:.65rem;width:34px;text-align:right;flex-shrink:0}
+
+    /* TABLE */
+    #table-panel{padding:1.1rem;display:none}
+    .table-wrap{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:auto}
+    table{width:100%;border-collapse:collapse}
+    thead{background:var(--bg);position:sticky;top:0}
+    thead th{padding:.65rem .85rem;text-align:left;font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)}
+    tbody tr{border-top:1px solid var(--border);transition:background .1s}
+    tbody tr:hover{background:rgba(59,130,246,.04)}
+    tbody td{padding:.6rem .85rem;font-size:.78rem}
+    .td-name{font-family:monospace;font-weight:600;color:#F1F5F9;cursor:pointer}
+    .td-name:hover{color:var(--blue);text-decoration:underline}
+    .td-type{font-family:monospace;color:var(--purple);font-size:.7rem}
+    .nb{display:flex;align-items:center;gap:.38rem}
+    .nb-bar{flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+    .nb-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--blue),var(--purple))}
+    .nb-pct{font-size:.68rem;color:var(--muted);min-width:30px;text-align:right}
+    .nb-pct.hi{color:var(--red)}
+    .dash{color:var(--border)}
+
+    ::-webkit-scrollbar{width:4px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+    .warn-bar{background:rgba(245,158,11,.08);border-bottom:1px solid rgba(245,158,11,.2);padding:.4rem 1rem;font-size:.73rem;color:#FCD34D}
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="topnav">
+  <div style="display:flex;align-items:center;gap:.8rem">
+    <div class="brand">
+      <div class="brand-icon">🗺️</div>
+      <span class="brand-name">GIS Dashboard</span>
+      <span class="brand-file">{{ data.layer_name }}</span>
+    </div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="switchTab('map')">🗺 Map</button>
+      <button class="nav-tab" onclick="switchTab('charts')">📊 Analytics</button>
+      <button class="nav-tab" onclick="switchTab('table')">📋 Fields</button>
+    </div>
+  </div>
+  <div class="nav-actions">
+    <a href="/" class="btn btn-ghost">← New File</a>
+    <a href="/export_pdf" class="btn btn-primary">⬇ Export PDF</a>
+  </div>
+</nav>
+
+<div class="main">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div>
+      <div class="sb-title">Layer Info</div>
+      <div class="meta-item"><span class="meta-label">CRS</span><span class="meta-value">EPSG:{{ data.crs_epsg or '?' }}</span></div>
+      <div class="meta-item"><span class="meta-label">Features</span><span class="meta-value">{{ data.feature_count }}</span></div>
+      <div class="meta-item"><span class="meta-label">Geometry</span><span class="meta-value">{{ data.geometry_type|join(', ') }}</span></div>
+      <div class="meta-item" style="border:none"><span class="meta-label">Fields</span><span class="meta-value">{{ data.fields|length }}</span></div>
+    </div>
+
+    <div>
+      <div class="sb-title">Choropleth (Map)</div>
+      <select class="choro-select" id="choro-field" onchange="applyChoropleth()">
+        <option value="">— Uniform —</option>
+        {% for f in data.fields %}{% if f.type in ['integer','float'] %}<option value="{{ f.name }}">{{ f.name }}</option>{% endif %}{% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <div class="sb-title">Fields — اضغط لتحليل</div>
+      <div class="field-pills">
+        {% for f in data.fields %}
+        <div class="fp" id="fp-{{ loop.index0 }}" onclick="analyzeField('{{ f.name }}')">
+          <div class="fp-dot dot-{% if f.type=='integer' %}int{% elif f.type=='float' %}float{% elif f.type=='string' %}str{% elif f.type=='bool' %}bool{% elif f.type=='datetime' %}dt{% else %}other{% endif %}"></div>
+          <span class="fp-name" title="{{ f.name }}">{{ f.name }}</span>
+          <span class="fp-type">{{ f.type }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </aside>
+
+  <!-- CONTENT -->
+  <div class="content">
+    {% if data.truncated %}<div class="warn-bar">⚠ Large dataset — map shows first 5,000 of {{ data.feature_count }} features</div>{% endif %}
+
+    <!-- MAP -->
+    <div id="map-panel">
+      <div id="map"></div>
+      <div class="map-bar">
+        <span>Basemap:</span>
+        <label><input type="radio" name="bm" value="dark" checked onchange="changeBasemap(this.value)"> Dark</label>
+        <label><input type="radio" name="bm" value="satellite" onchange="changeBasemap(this.value)"> Satellite</label>
+        <label><input type="radio" name="bm" value="osm" onchange="changeBasemap(this.value)"> OSM</label>
+        <span id="choro-legend" style="display:none;margin-left:auto;align-items:center;gap:.4rem;">
+          <span>Low</span><div class="color-ramp"></div><span>High</span>
+          <span id="choro-lbl" style="color:#60A5FA;margin-left:.2rem"></span>
+        </span>
+      </div>
+    </div>
+
+    <!-- ANALYTICS PANEL -->
+    <div id="charts-panel">
+      <!-- Empty state (shown before any field selected) -->
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon">📊</div>
+        <div class="empty-title">Select a field from the sidebar</div>
+        <div class="empty-sub">Click any field and charts will be generated automatically based on the data type</div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem">
+          <span style="font-size:.72rem;padding:.25rem .6rem;border-radius:20px;background:rgba(59,130,246,.1);color:#60A5FA">🔵 integer/float → histogram + box plot + CDF</span>
+          <span style="font-size:.72rem;padding:.25rem .6rem;border-radius:20px;background:rgba(16,185,129,.1);color:#34D399">🟢 string → bar chart + pie + top values</span>
+        </div>
+      </div>
+
+      <!-- Dynamic content injected here -->
+      <div id="charts-content" style="display:none;flex-direction:column;gap:1rem"></div>
+    </div>
+
+    <!-- TABLE -->
+    <div id="table-panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Field</th><th>Type</th><th>Unique</th><th>Null %</th>
+            <th>Min</th><th>Max</th><th>Mean</th><th>Median</th><th>Std</th>
+          </tr></thead>
+          <tbody>
+          {% for f in data.fields %}
+          <tr>
+            <td class="td-name" onclick="analyzeField('{{ f.name }}')">{{ f.name }}</td>
+            <td class="td-type">{{ f.type }}</td>
+            <td>{{ f.unique }}</td>
+            <td><div class="nb"><div class="nb-bar"><div class="nb-fill" style="width:{{ f.null_pct }}%"></div></div><span class="nb-pct {% if f.null_pct > 20 %}hi{% endif %}">{{ f.null_pct }}%</span></div></td>
+            <td>{% if f.min is not none %}{{ f.min }}{% else %}<span class="dash">—</span>{% endif %}</td>
+            <td>{% if f.max is not none %}{{ f.max }}{% else %}<span class="dash">—</span>{% endif %}</td>
+            <td>{% if f.mean is not none %}{{ f.mean }}{% else %}<span class="dash">—</span>{% endif %}</td>
+            <td>{% if f.median is not none %}{{ f.median }}{% else %}<span class="dash">—</span>{% endif %}</td>
+            <td>{% if f.std is not none %}{{ f.std }}{% else %}<span class="dash">—</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DATA -->
+<script>
+const GEOJSON    = {{ data.geojson | safe }};
+const CHART_DATA = {{ data.chart_data | tojson }};
+const FIELDS     = {{ data.fields | tojson }};
+const GEOM_COUNTS= {{ data.geom_counts | tojson }};
+const BBOX       = {{ data.bbox | tojson }};
+</script>
+
+<script>
+/* ── CHART.JS DEFAULTS ─────────────────────────────── */
+Chart.defaults.color='#546E8A';
+Chart.defaults.borderColor='#1C2D44';
+Chart.defaults.font.family='Segoe UI,system-ui,sans-serif';
+Chart.defaults.plugins.tooltip.backgroundColor='#0E1525';
+Chart.defaults.plugins.tooltip.borderColor='#1C2D44';
+Chart.defaults.plugins.tooltip.borderWidth=1;
+Chart.defaults.plugins.tooltip.padding=8;
+const P=['#3B82F6','#8B5CF6','#10B981','#F59E0B','#EF4444','#06B6D4','#EC4899','#84CC16','#F97316','#6366F1','#14B8A6','#A855F7'];
+
+/* ── MAP ───────────────────────────────────────────── */
+const BM={
+  dark:     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© CARTO',subdomains:'abcd',maxZoom:19}),
+  satellite:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19}),
+  osm:      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM',maxZoom:19}),
+};
+const map=L.map('map',{zoomControl:true,layers:[BM.dark]});
+map.fitBounds([[BBOX.miny,BBOX.minx],[BBOX.maxy,BBOX.maxx]],{padding:[20,20]});
+function changeBasemap(k){Object.values(BM).forEach(b=>map.removeLayer(b));BM[k].addTo(map);if(geoLayer)geoLayer.bringToFront();}
+
+let geoLayer=null,choroField=null,choroMin=0,choroMax=1;
+const defStyle=f=>{const pt=f.geometry&&(f.geometry.type==='Point'||f.geometry.type==='MultiPoint');return{color:'#3B82F6',weight:pt?0:1.5,opacity:.9,fillColor:'#3B82F6',fillOpacity:pt?.8:.25};};
+const choroStyle=f=>{
+  const v=parseFloat(f.properties[choroField]);
+  const t=isNaN(v)?0:(v-choroMin)/(choroMax-choroMin||1);
+  const r=Math.round(37+t*(236-37)),g=Math.round(99+t*(72-99)),b=Math.round(235+t*(153-235));
+  const pt=f.geometry&&(f.geometry.type==='Point'||f.geometry.type==='MultiPoint');
+  return{color:`rgb(${r},${g},${b})`,weight:pt?0:1.5,opacity:1,fillColor:`rgb(${r},${g},${b})`,fillOpacity:pt?.9:.65};
+};
+function popup(props){
+  if(!props)return'No attributes';
+  return`<div style="max-width:240px;font-family:monospace"><table style="border-collapse:collapse">${
+    Object.entries(props).slice(0,14).map(([k,v])=>`<tr><td style="color:#546E8A;padding:.18rem .35rem;font-size:.7rem;white-space:nowrap">${k}</td><td style="padding:.18rem .35rem;font-size:.7rem">${v??'—'}</td></tr>`).join('')
+  }</table></div>`;
+}
+function renderLayer(sf){
+  if(geoLayer)map.removeLayer(geoLayer);
+  geoLayer=L.geoJSON(GEOJSON,{style:sf,pointToLayer:(f,ll)=>L.circleMarker(ll,{radius:6,...sf(f)}),
+    onEachFeature:(f,l)=>{l.bindPopup(popup(f.properties),{maxHeight:280});l.on('mouseover',function(){this.openPopup();});}
+  }).addTo(map);
+}
+renderLayer(defStyle);
+function applyChoropleth(){
+  const fld=document.getElementById('choro-field').value;
+  const leg=document.getElementById('choro-legend');
+  if(!fld){choroField=null;renderLayer(defStyle);leg.style.display='none';return;}
+  choroField=fld;
+  const vals=GEOJSON.features.map(f=>parseFloat(f.properties[fld])).filter(v=>!isNaN(v));
+  choroMin=Math.min(...vals);choroMax=Math.max(...vals);
+  renderLayer(choroStyle);
+  leg.style.display='flex';document.getElementById('choro-lbl').textContent=fld;
+}
+
+/* ── TAB SWITCH ────────────────────────────────────── */
+function switchTab(tab){
+  ['map','charts','table'].forEach((t,i)=>document.querySelectorAll('.nav-tab')[i].classList.toggle('active',t===tab));
+  document.getElementById('map-panel').style.display    =tab==='map'?'flex':'none';
+  document.getElementById('charts-panel').style.display =tab==='charts'?'flex':'none';
+  document.getElementById('table-panel').style.display  =tab==='table'?'block':'none';
+  if(tab==='map')setTimeout(()=>map.invalidateSize(),50);
+}
+
+/* ── HELPERS ───────────────────────────────────────── */
+function fmt(n){
+  if(n===null||n===undefined||n==='')return'—';
+  const x=parseFloat(n);
+  if(isNaN(x))return String(n);
+  if(Math.abs(x)>=1e9)return(x/1e9).toFixed(2)+'B';
+  if(Math.abs(x)>=1e6)return(x/1e6).toFixed(2)+'M';
+  if(Math.abs(x)>=1e3)return(x/1e3).toFixed(1)+'K';
+  return x.toLocaleString(undefined,{maximumFractionDigits:4});
+}
+function mkCanvas(id,h='ch-240'){return`<div class="ch ${h}"><canvas id="${id}"></canvas></div>`;}
+let activeCharts=[];
+function destroyCharts(){activeCharts.forEach(c=>{try{c.destroy()}catch(e){}});activeCharts=[];}
+function reg(c){activeCharts.push(c);return c;}
+
+/* ── MAIN: analyzeField ────────────────────────────── */
+function analyzeField(name){
+  // sidebar highlight
+  document.querySelectorAll('.fp').forEach(el=>el.classList.remove('active'));
+  FIELDS.forEach((f,i)=>{if(f.name===name)document.getElementById('fp-'+i).classList.add('active');});
+
+  // switch to charts
+  if(document.getElementById('charts-panel').style.display==='none')switchTab('charts');
+
+  const f=FIELDS.find(x=>x.name===name);
+  const cd=CHART_DATA[name];
+  if(!f||!cd)return;
+
+  destroyCharts();
+  document.getElementById('empty-state').style.display='none';
+  const cc=document.getElementById('charts-content');
+  cc.style.display='flex';
+  cc.innerHTML='';
+
+  const isNum=f.type==='integer'||f.type==='float';
+
+  // ── FIELD HEADER ──────────────────────────────────
+  const nullCls=f.null_pct===0?'hf-null-ok':f.null_pct<20?'hf-null-warn':'hf-null-bad';
+  const nullColCls=f.null_pct===0?'fh-null-ok':f.null_pct<20?'fh-null-warn':'fh-null-bad';
+  const nodata = f.nodata_removed && f.nodata_removed.length > 0;
+  const nodataHtml = nodata
+    ? `<span style="font-size:.7rem;padding:.18rem .5rem;border-radius:10px;background:rgba(245,158,11,.12);color:#FCD34D;border:1px solid rgba(245,158,11,.25)">⚠ NoData removed: ${f.nodata_removed.join(', ')}</span>`
+    : '';
+
+  cc.innerHTML+=`
+    <div class="field-header">
+      <span class="fh-name">${name}</span>
+      <span class="fh-type">${f.type}</span>
+      <span class="fh-count">${f.unique} unique values</span>
+      <span class="fh-null ${nullColCls}">${f.null_pct}% null</span>
+      ${nodataHtml}
+      <span style="margin-left:auto;font-size:.7rem;color:var(--muted)">${FIELDS.findIndex(x=>x.name===name)+1} / ${FIELDS.length} fields</span>
+    </div>`;
+
+  if(isNum){
+    buildNumericCharts(cc, f, cd);
+  } else if(f.type==='string'){
+    buildStringCharts(cc, f, cd);
+  } else if(f.type==='bool'){
+    buildBoolCharts(cc, f, cd);
+  } else {
+    cc.innerHTML+=`<div class="cc"><div class="cc-head"><span class="cc-title">No chart available for type: ${f.type}</span></div></div>`;
+  }
+
+  cc.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+/* ── NUMERIC CHARTS ────────────────────────────────── */
+function buildNumericCharts(cc, f, cd){
+  const h=cd.histogram;
+  const p=cd.percentiles||{};
+
+  // KPI row
+  cc.innerHTML+=`
+    <div class="kpi-row">
+      <div class="kpi kpi-cyan"><div class="kpi-label">Min</div><div class="kpi-value" style="color:var(--cyan)">${fmt(f.min)}</div></div>
+      <div class="kpi kpi-blue"><div class="kpi-label">P25</div><div class="kpi-value" style="color:var(--blue)">${fmt(p.p25)}</div></div>
+      <div class="kpi kpi-purple"><div class="kpi-label">Median</div><div class="kpi-value" style="color:var(--purple)">${fmt(p.p50)}</div><div class="kpi-sub">P50</div></div>
+      <div class="kpi kpi-green"><div class="kpi-label">Mean</div><div class="kpi-value" style="color:var(--green)">${fmt(f.mean)}</div></div>
+      <div class="kpi kpi-amber"><div class="kpi-label">P75</div><div class="kpi-value" style="color:var(--amber)">${fmt(p.p75)}</div></div>
+      <div class="kpi kpi-red"><div class="kpi-label">Max</div><div class="kpi-value" style="color:var(--red)">${fmt(f.max)}</div></div>
+    </div>`;
+
+  // Detect skew
+  const isSkewed = cd.histogram && cd.histogram.use_log;
+  const skewBadge = isSkewed
+    ? `<span class="cc-badge badge-amber" title="Log scale used — data spans many orders of magnitude">⚠ log scale</span>`
+    : `<span class="cc-badge badge-blue">15 bins</span>`;
+
+  // Histogram + Box + CDF
+  cc.innerHTML+=`
+    <div class="cg">
+      <div class="cc span-all">
+        <div class="cc-head"><span class="cc-title">Histogram — Distribution</span>${skewBadge}</div>
+        ${isSkewed ? `<div style="font-size:.7rem;color:var(--amber);margin-bottom:.5rem;padding:.3rem .5rem;background:rgba(245,158,11,.08);border-radius:6px;border:1px solid rgba(245,158,11,.2)">⚠ X-axis uses <b>log scale</b> — data is heavily skewed (max/min ratio &gt; 1000)</div>` : ''}
+        ${mkCanvas('c-hist','ch-280')}
+      </div>
+    </div>
+    <div class="cg">
+      <div class="cc">
+        <div class="cc-head"><span class="cc-title">Box Plot</span><span class="cc-badge badge-purple">percentiles</span></div>
+        <div id="c-box"></div>
+      </div>
+      <div class="cc">
+        <div class="cc-head"><span class="cc-title">Cumulative Distribution (CDF)</span><span class="cc-badge badge-cyan">CDF</span></div>
+        ${mkCanvas('c-cdf','ch-200')}
+      </div>
+    </div>`;
+
+  setTimeout(()=>{
+    // Histogram — gradient bars
+    const gradColors=h.values.map((_,i)=>{
+      const t=i/(h.values.length-1||1);
+      const r=Math.round(59+t*(139-59)),g=Math.round(130+t*(92-130)),b=Math.round(246+t*(246-246));
+      return `rgba(${r},${g},${b},.75)`;
+    });
+    reg(new Chart(document.getElementById('c-hist'),{
+      type:'bar',
+      data:{labels:h.labels,datasets:[{label:f.name,data:h.values,backgroundColor:gradColors,borderWidth:0,borderRadius:4,borderSkipped:false}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{
+          legend:{display:false},
+          tooltip:{callbacks:{
+            title:t=>`Bin ${t[0].dataIndex+1}: ${t[0].label} → ${h.labels[t[0].dataIndex+1]||h.edge_end||''}`,
+            label:t=>`Count: ${t.raw.toLocaleString()}`
+          }}
+        },
+        scales:{
+          x:{grid:{color:'rgba(255,255,255,.03)'},ticks:{font:{size:9},maxRotation:35,autoSkip:true,maxTicksLimit:12}},
+          y:{grid:{color:'rgba(255,255,255,.04)'},beginAtZero:true,ticks:{font:{size:9}}}
+        }}
+    }));
+
+    // Box plot (CSS visual) — use P10/P90 as display range to avoid outlier distortion
+    const bpMin=p.p10??p.p0, bpMax=p.p90??p.p100;
+    const bpRange=bpMax-bpMin||1;
+    // clamp values to [bpMin, bpMax] for positioning
+    const pos=v=>(Math.min(Math.max((v-bpMin)/bpRange,0),1)*100).toFixed(2);
+    const wid=(a,b)=>((Math.min(b,bpMax)-Math.max(a,bpMin))/bpRange*100).toFixed(2);
+    document.getElementById('c-box').innerHTML=`
+      <div style="padding:1rem 1rem .5rem">
+        <div style="position:relative;height:40px;margin:0 .5rem">
+          <div style="position:absolute;top:15px;height:10px;left:0;right:0;background:rgba(255,255,255,.05);border-radius:3px"></div>
+          <div style="position:absolute;top:15px;height:10px;left:${pos(p.p25)}%;width:${wid(p.p25,p.p75)}%;background:rgba(59,130,246,.4);border:1px solid #3B82F6;border-radius:3px"></div>
+          <div style="position:absolute;top:8px;height:24px;left:${pos(p.p50)}%;width:2px;transform:translateX(-50%);background:#06B6D4;border-radius:1px"></div>
+          <div style="position:absolute;top:19px;height:2px;left:0;right:${(100-parseFloat(pos(p.p25))).toFixed(2)}%;background:var(--muted)"></div>
+          <div style="position:absolute;top:19px;height:2px;left:${pos(p.p75)}%;right:0;background:var(--muted)"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.3rem;margin-top:.5rem;text-align:center">
+          ${[['Min',p.p0,'#06B6D4'],['Q1',p.p25,'#3B82F6'],['Median',p.p50,'#8B5CF6'],['Q3',p.p75,'#F59E0B'],['Max',p.p100,'#EF4444']].map(([l,v,c])=>`
+          <div><div style="font-size:.6rem;color:var(--muted)">${l}</div><div style="font-size:.8rem;font-weight:700;color:${c}">${fmt(v)}</div></div>`).join('')}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.3rem;margin-top:.6rem;text-align:center">
+          ${[['P10',p.p10,'#546E8A'],['P90',p.p90,'#546E8A'],['Mean',f.mean,'#10B981'],['Std Dev',f.std,'#A78BFA']].map(([l,v,c])=>`
+          <div style="background:var(--card2);border-radius:6px;padding:.35rem"><div style="font-size:.6rem;color:var(--muted)">${l}</div><div style="font-size:.78rem;font-weight:700;color:${c}">${fmt(v)}</div></div>`).join('')}
+        </div>
+      </div>`;
+
+    // CDF
+    const sorted=[...(cd.raw_values||[])].sort((a,b)=>a-b);
+    const step=Math.max(1,Math.floor(sorted.length/60));
+    const cdfX=sorted.filter((_,i)=>i%step===0);
+    const cdfY=cdfX.map((_,i)=>parseFloat(((i*step/sorted.length)*100).toFixed(1)));
+    reg(new Chart(document.getElementById('c-cdf'),{
+      type:'line',
+      data:{labels:cdfX.map(v=>fmt(v)),datasets:[{data:cdfY,borderColor:'#06B6D4',backgroundColor:'rgba(6,182,212,.08)',fill:true,tension:.35,pointRadius:0,borderWidth:2}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:t=>`${t.raw}% of values ≤ ${cdfX[t.dataIndex]}`}}},
+        scales:{x:{ticks:{maxTicksLimit:7,font:{size:9}},grid:{color:'rgba(255,255,255,.03)'}},
+                y:{beginAtZero:true,max:100,ticks:{callback:v=>v+'%',font:{size:9}},grid:{color:'rgba(255,255,255,.04)'}}}}
+    }));
+  },30);
+}
+
+/* ── STRING CHARTS ─────────────────────────────────── */
+function buildStringCharts(cc, f, cd){
+  const tn=cd.top_n||{labels:[],values:[]};
+  const total=tn.values.reduce((a,b)=>a+b,0);
+
+  // KPI row
+  cc.innerHTML+=`
+    <div class="kpi-row">
+      <div class="kpi kpi-blue"><div class="kpi-label">Unique Values</div><div class="kpi-value" style="color:var(--blue)">${f.unique}</div></div>
+      <div class="kpi kpi-green"><div class="kpi-label">Most Common</div><div class="kpi-value" style="font-size:.9rem;color:var(--green)">${tn.labels[0]||'—'}</div><div class="kpi-sub">${fmt(tn.values[0])} occurrences</div></div>
+      <div class="kpi kpi-amber"><div class="kpi-label">Coverage</div><div class="kpi-value" style="color:var(--amber)">${(100-f.null_pct).toFixed(1)}%</div><div class="kpi-sub">non-null</div></div>
+      <div class="kpi kpi-purple"><div class="kpi-label">Null Values</div><div class="kpi-value" style="color:${f.null_pct>20?'var(--red)':'var(--purple)'}">${f.null_pct}%</div></div>
+    </div>`;
+
+  // Bar + Pie side by side
+  cc.innerHTML+=`
+    <div class="cg">
+      <div class="cc">
+        <div class="cc-head"><span class="cc-title">Top ${tn.labels.length} Values</span><span class="cc-badge badge-blue">horizontal bar</span></div>
+        ${mkCanvas('c-hbar','ch-280')}
+      </div>
+      <div class="cc">
+        <div class="cc-head"><span class="cc-title">Share Distribution</span><span class="cc-badge badge-purple">pie</span></div>
+        ${mkCanvas('c-pie','ch-280')}
+      </div>
+    </div>
+    <div class="cg">
+      <div class="cc span-all">
+        <div class="cc-head"><span class="cc-title">Ranking</span><span class="cc-badge badge-green">top ${tn.labels.length}</span></div>
+        <div id="c-rank" class="rank-list"></div>
+      </div>
+    </div>`;
+
+  setTimeout(()=>{
+    // Horizontal bar
+    reg(new Chart(document.getElementById('c-hbar'),{
+      type:'bar',
+      data:{labels:tn.labels,datasets:[{data:tn.values,backgroundColor:P.map(c=>c+'99'),borderColor:P,borderWidth:1,borderRadius:4}]},
+      options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:t=>`${t.raw.toLocaleString()} (${(t.raw/total*100).toFixed(1)}%)`}}},
+        scales:{x:{beginAtZero:true,ticks:{font:{size:9}},grid:{color:'rgba(255,255,255,.03)'}},y:{ticks:{font:{size:10}}}}}
+    }));
+
+    // Pie
+    reg(new Chart(document.getElementById('c-pie'),{
+      type:'pie',
+      data:{labels:tn.labels,datasets:[{data:tn.values,backgroundColor:P,borderWidth:2,borderColor:'#131E30'}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'right',labels:{boxWidth:10,padding:7,font:{size:10}}}}}
+    }));
+
+    // Ranking bars
+    const mx=Math.max(...tn.values);
+    document.getElementById('c-rank').innerHTML=tn.labels.map((lbl,i)=>`
+      <div class="ri">
+        <span class="ri-n">${i+1}</span>
+        <span class="ri-l" title="${lbl}">${lbl}</span>
+        <div class="ri-bw"><div class="ri-b" style="width:${(tn.values[i]/mx*100).toFixed(1)}%"></div></div>
+        <span class="ri-v">${fmt(tn.values[i])}</span>
+      </div>`).join('');
+  },30);
+}
+
+/* ── BOOL CHARTS ───────────────────────────────────── */
+function buildBoolCharts(cc, f, cd){
+  const tn=cd.top_n||{labels:[],values:[]};
+  cc.innerHTML+=`
+    <div class="cg">
+      <div class="cc">
+        <div class="cc-head"><span class="cc-title">True / False Distribution</span><span class="cc-badge badge-amber">boolean</span></div>
+        ${mkCanvas('c-bool','ch-240')}
+      </div>
+    </div>`;
+  setTimeout(()=>{
+    reg(new Chart(document.getElementById('c-bool'),{
+      type:'doughnut',
+      data:{labels:tn.labels,datasets:[{data:tn.values,backgroundColor:['rgba(16,185,129,.7)','rgba(239,68,68,.7)'],borderWidth:2,borderColor:'#131E30'}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'right'}}}
+    }));
+  },30);
+}
+</script>
+</body>
+</html>

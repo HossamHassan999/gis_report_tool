@@ -1,0 +1,65 @@
+# ─────────────────────────────
+# Python
+# ─────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+env/
+venv/
+.venv/
+uploads/
+# Environment Variables
+.env
+.env.*
+
+# ─────────────────────────────
+# Flask
+# ─────────────────────────────
+instance/
+.webassets-cache
+
+# ─────────────────────────────
+# PyInstaller
+# ─────────────────────────────
+build/
+dist/
+*.spec
+
+# If you want to keep spec file, comment the line above
+
+# ─────────────────────────────
+# Logs
+# ─────────────────────────────
+*.log
+
+# ─────────────────────────────
+# Output Files
+# ─────────────────────────────
+outputs/
+*.pdf
+report_output.json
+
+# ─────────────────────────────
+# OS Files
+# ─────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─────────────────────────────
+# IDE
+# ─────────────────────────────
+.vscode/
+.idea/
+
+# ─────────────────────────────
+# GIS Specific (Optional)
+# ─────────────────────────────
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.gpkg
+*.geojson

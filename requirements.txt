@@ -1,0 +1,7 @@
+flask
+geopandas
+pandas
+shapely
+jinja2
+weasyprint
+pyinstaller
